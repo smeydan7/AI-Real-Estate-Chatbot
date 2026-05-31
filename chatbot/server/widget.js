@@ -296,6 +296,35 @@
   `;
 
   /* ── Markdown parser ── */
+  function linkifyBareUrls(html) {
+    var savedAnchors = [];
+    html = html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, function (anchor) {
+      savedAnchors.push(anchor);
+      return '\x00A' + (savedAnchors.length - 1) + '\x00';
+    });
+
+    html = html.replace(/(https?:\/\/[^\s<]+)/g, function (match) {
+      var url = match;
+      var trailing = '';
+      while (/[.,;:!?)}\]]$/.test(url)) {
+        trailing = url.slice(-1) + trailing;
+        url = url.slice(0, -1);
+      }
+      return (
+        '<a href="' +
+        url +
+        '" target="_blank" rel="noopener noreferrer">' +
+        url +
+        '</a>' +
+        trailing
+      );
+    });
+
+    return html.replace(/\x00A(\d+)\x00/g, function (_, i) {
+      return savedAnchors[Number(i)];
+    });
+  }
+
   function parseMarkdown(text) {
     // 1. Escape HTML entities
     var html = text
@@ -315,7 +344,10 @@
       '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
     );
 
-    // 5. Process line-by-line for lists and paragraphs
+    // 5. Bare URLs (assistant often returns https://... without markdown)
+    html = linkifyBareUrls(html);
+
+    // 6. Process line-by-line for lists and paragraphs
     var lines = html.split('\n');
     var output = [];
     var inUl = false;
